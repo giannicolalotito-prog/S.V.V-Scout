@@ -291,7 +291,7 @@ var ACTIONS={
   ricezione:{label:'Ricezione',en:'Reception',res:[['perfetta','Perfetta (3m)','good','#'],['positiva','Positiva','neu','+'],['negativa','Negativa','warn','−'],['errore','Errore (ace subito)','bad','=']]},
   attacco:{label:'Attacco',en:'Attack',res:[['punto','Punto vincente','good','P'],['muro','Muro subito','warn','M'],['errore','Errore / fuori','bad','='],['continua','Continua','neu','/']]},
   muro:{label:'Muro',en:'Block',res:[['punto','Punto','good','P'],['tocco','Tocco','neu','T'],['errore','Errore','bad','=']]},
-  battuta:{label:'Battuta',en:'Serve',res:[['ace','Ace (+punto)','good','✓'],['positiva','Positiva / difficile','neu','↗'],['errore','Errore','bad','✕']]}
+  battuta:{label:'Battuta',en:'Serve',res:[['ace','Ace (+punto)','good','✓'],['positiva','Positiva / difficile','neu','↗'],['facile','Facile','warn','↘'],['errore','Errore','bad','✕']]}
 };
 var ICONS={
   battuta:'<path d="M13 2L4 14h7l-1 8 9-12h-7z"/>',
@@ -378,7 +378,7 @@ function renderBoard(){
 function sumTiles(pid){
   var g=function(t,r){return count(pid,t,r,'all');};
   var att=g('attacco','punto')+g('attacco','muro')+g('attacco','errore')+g('attacco','continua');
-  var bat=g('battuta','ace')+g('battuta','positiva')+g('battuta','errore');
+  var bat=g('battuta','ace')+g('battuta','positiva')+g('battuta','facile')+g('battuta','errore');
   var ri=g('ricezione','perfetta')+g('ricezione','positiva')+g('ricezione','negativa')+g('ricezione','errore');
   var tile=function(v,l){return '<div><b>'+v+'</b><small>'+l+'</small></div>';};
   return '<div class="sum">'+
@@ -406,10 +406,10 @@ function viewGara(){
   }
   if(!player(ui.pid)){var fl=S.lineup.filter(Boolean);ui.pid=fl.length?fl[0]:S.players[0].id;}
   var sel=player(ui.pid);
-  h+=courtHTML();
-  h+='<div class="pcard2"><div class="top"><div class="bg">#'+esc(sel.num||'–')+'</div><div><b>'+esc(sel.name)+'</b><span class="rl">'+(sel.role?'Ruolo: '+esc(sel.role):'Ruolo non indicato')+'</span></div>'+
+  var pc='<div class="pcard2"><div class="top"><div class="bg">#'+esc(sel.num||'–')+'</div><div><b>'+esc(sel.name)+'</b><span class="rl">'+(sel.role?'Ruolo: '+esc(sel.role):'Ruolo non indicato')+'</span></div>'+
      '<div class="pts">'+pointsOf(sel.id,'all')+'<small>punti</small></div></div>'+
      '<div class="pnav"><button data-a="step" data-v="-1" aria-label="Atleta precedente">‹</button><button data-a="picker">Cambia atleta</button><button data-a="step" data-v="1" aria-label="Atleta successiva">›</button></div></div>';
+  h+=courtHTML();
   h+=sumTiles(sel.id);
   h+='<div class="guide"><span>Scegli fondamentale e risultato</span><span>Tocca per registrare</span></div>';
   Object.keys(ACTIONS).forEach(function(t){
@@ -435,6 +435,7 @@ function viewGara(){
     h+='</ul>';
   }
   h+='</div><div class="row"><button class="btn ghost" data-a="undo">Annulla ultima azione</button></div>';
+  h+=pc;
   return h;
 }
 function pickerHTML(){
@@ -530,12 +531,12 @@ function compute(f){
   var rows=S.players.map(function(p){
     var g=function(t,r){return count(p.id,t,r,f);};
     var r={p:p,attP:g('attacco','punto'),attE:g('attacco','errore'),attM:g('attacco','muro'),attC:g('attacco','continua'),
-      ace:g('battuta','ace'),bE:g('battuta','errore'),bPos:g('battuta','positiva'),mu:g('muro','punto'),
+      ace:g('battuta','ace'),bE:g('battuta','errore'),bPos:g('battuta','positiva'),bFac:g('battuta','facile'),mu:g('muro','punto'),
       riP:g('ricezione','perfetta'),riPos:g('ricezione','positiva'),riNeg:g('ricezione','negativa'),riE:g('ricezione','errore'),
       di:g('difesa','ottima')+g('difesa','positiva'),diE:g('difesa','errore'),al:g('alzata','ok'),
       played:S.events.some(function(e){return e.pid===p.id&&inSet(e,f);})};
     r.att=r.attP+r.attE+r.attM+r.attC;
-    r.bat=r.ace+r.bE+r.bPos;
+    r.bat=r.ace+r.bE+r.bPos+r.bFac;
     r.ri=r.riP+r.riPos+r.riNeg+r.riE;
     r.pt=r.attP+r.ace+r.mu;
     r.eff=r.att?Math.round((r.attP-r.attE-r.attM)/r.att*100):null;

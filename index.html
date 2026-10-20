@@ -256,6 +256,15 @@ tbody tr.sel td:first-child{background:var(--surface2)}
 .cact button{min-height:44px;border-radius:12px;border:1.5px solid var(--line);font-weight:600;font-size:14.5px}
 .cact button:active{background:var(--surface2)}
 .slotrow{display:grid;grid-template-columns:40px 64px 1fr;gap:8px;align-items:center;margin-bottom:12px}
+.zl{grid-column:1 / -1;font-size:12.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:-2px}
+.chk{margin-top:8px;padding:10px 12px;border-radius:14px;font-size:14px;line-height:1.4}
+.chk.ok{background:var(--good-bg);color:var(--good)}
+.chk.bad{background:var(--warn-bg);color:var(--warn)}
+.chk div{margin-top:4px}
+.subc{display:flex;align-items:center;gap:10px;margin-top:10px;font-size:14px;color:var(--muted)}
+.subc b{font-size:17px;color:var(--text)}
+.subc.full b{color:var(--bad)}
+.subc button{margin-left:auto;min-height:34px;padding:0 12px;border-radius:10px;background:var(--surface2);color:var(--muted);font-weight:600;font-size:13px}
 .slotsub{grid-column:2 / -1;display:flex;gap:8px;align-items:center}
 .slotsub select{flex:1;min-width:0}
 .slotsub .none{font-size:13px}
@@ -336,11 +345,12 @@ var US={attacco:['punto'],battuta:['ace'],muro:['punto']};
 var THEM={attacco:['muro','errore'],battuta:['errore'],muro:['errore'],ricezione:['errore'],difesa:['errore'],alzata:['errore']};
 var MIG={muro:{tocco:'toccoNoi'},attacco:{murato:'muro'},battuta:{ok:'positiva'},difesa:{ottima:'perfetta',positiva:'buona'}};
 
-function def(){return {team:'Noi',opp:'Avversari',players:[],events:[],sets:[],set:1,serving:'us',lib:{cen:null,wait:false},libMsg:'',lineup:[null,null,null,null,null,null]};}
+function def(){return {team:'Noi',opp:'Avversari',players:[],events:[],sets:[],set:1,serving:'us',lib:{cen:null,wait:false},libMsg:'',subs:{},lineup:[null,null,null,null,null,null]};}
 function load(){try{var r=localStorage.getItem(KEY);if(r){var o=Object.assign(def(),JSON.parse(r));
   o.events=o.events.filter(function(e){return ACTIONS[e.type]||e.type==='adj';});
   o.events.forEach(function(e){if(MIG[e.type]&&MIG[e.type][e.res])e.res=MIG[e.type][e.res];});
   if(!o.lib||typeof o.lib!=='object')o.lib={cen:null};
+  if(!o.subs||typeof o.subs!=='object')o.subs={};
   if(!Array.isArray(o.lineup)||o.lineup.length!==6)o.lineup=[null,null,null,null,null,null];
   o.lineup=o.lineup.map(function(id){return o.players.some(function(p){return p.id===id;})?id:null;});return o;}}catch(e){}return def();}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S));}catch(e){}}
@@ -424,13 +434,14 @@ function sumTiles(pid){
 var SLOT_ORDER=[3,2,1,4,5,0];
 function courtHTML(){
   var lpz=liberoPlayer(),ncen=S.players.filter(function(p){return p.role==='Centrale';}).length;
-  var hintlib=(!lpz||!ncen)?'<p class="hint" style="margin:8px 2px 0">Per lo scambio automatico libero/centrale imposta i ruoli Libero e Centrale nella scheda Squadra.</p>':'';
+  var prob=lineupProblems()[0],nsub=(S.subs&&S.subs[S.set])||0;
+  var hintlib=prob?'<p class="hint" style="margin:8px 2px 0">Scambio libero non pronto: '+esc(prob)+' (scheda Squadra).</p>':'';
   var h='<div class="court"><h3><span>In campo</span><span style="text-transform:none;letter-spacing:0;font-weight:500">tocca per scegliere chi gioca</span></h3><div class="net" aria-hidden="true"></div><div class="cgrid">';
   SLOT_ORDER.forEach(function(i){
     var p=player(S.lineup[i]);
     h+='<button class="cell'+(p&&ui.pid===p.id?' on':'')+(p?'':' empty2')+(i===0&&S.serving==='us'?' srv':'')+(p&&p.role==='Libero'?' isl':'')+'" data-a="slot" data-v="'+i+'" aria-label="Posizione '+(i+1)+'"><span class="pos">P'+(i+1)+'</span><span class="cn">'+(p?esc(p.num||'–'):'+')+'</span><span class="cname">'+(p?esc(p.name):'Scegli')+'</span></button>';
   });
-  h+='</div><div class="cact"><button data-a="sub">Cambio</button><button data-a="libero">Libero ⇄</button><button data-a="rot" data-v="-1" aria-label="Ruota in senso antiorario">↺</button><button data-a="rot" data-v="1" aria-label="Ruota in senso orario">↻</button></div>'+(S.libMsg?'<p class="libmsg">⇄ Ultimo cambio libero: '+esc(S.libMsg)+'</p>':'')+hintlib+'</div>';
+  h+='</div><div class="cact"><button data-a="sub">Cambio</button><button data-a="libero">Libero ⇄</button><button data-a="rot" data-v="-1" aria-label="Ruota in senso antiorario">↺</button><button data-a="rot" data-v="1" aria-label="Ruota in senso orario">↻</button></div>'+'<div class="subc'+(nsub>=6?' full':'')+'">Cambi nel set '+S.set+': <b>'+nsub+'/6</b><button data-a="subminus" aria-label="Togli un cambio">−1</button></div>'+(S.libMsg?'<p class="libmsg">⇄ Ultimo cambio libero: '+esc(S.libMsg)+'</p>':'')+hintlib+'</div>';
   return h;
 }
 function viewGara(){
@@ -589,7 +600,7 @@ function scoreBarHTML(){
 }
 function appbarHTML(){
   return '<div class="appbar"><div class="logo"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3c0 6-3 9-9 9M12 3c4 2 6 5 6 9M21 12c-6 0-9 3-9 9M3 12c2 0 4 .5 6 2"/></svg></div>'+
-    '<div><b>VolleyScout<span class="pro">PRO</span></b><small>Scout in diretta · v12</small></div><img class="club" alt="San Valentino Volley Andria" width="52" height="52" src="'+LOGO+'"></div>';
+    '<div><b>VolleyScout<span class="pro">PRO</span></b><small>Scout in diretta · v13</small></div><img class="club" alt="San Valentino Volley Andria" width="52" height="52" src="'+LOGO+'"></div>';
 }
 
 function roleSelect(cur,attrs){
@@ -601,23 +612,50 @@ function slotPlayer(i){
   if(p&&lp&&p.id===lp.id&&S.lib&&S.lib.cen){var c=player(S.lib.cen);if(c)return c;}
   return p;
 }
-function lineupEditor(){
-  var h='<h2>Formazione titolare</h2><p class="sub">Numero, nome e ruolo delle sei titolari. P1 è la battuta. Per lo scambio automatico servono i ruoli Centrale e Libero.</p><div class="card">';
-  for(var i=0;i<6;i++){
-    var p=slotPlayer(i);
-    h+='<div class="slotrow"><span class="ps">P'+(i+1)+'</span>'+
-      '<input class="in" data-slot="'+i+'" data-f="num" inputmode="numeric" maxlength="2" placeholder="N°" value="'+esc(p?p.num||'':'')+'" aria-label="Numero posizione '+(i+1)+'">'+
-      '<input class="in" data-slot="'+i+'" data-f="name" maxlength="30" placeholder="Nome atleta" value="'+esc(p?p.name:'')+'" aria-label="Nome posizione '+(i+1)+'">'+
-      '<div class="slotsub"><select class="in" data-srole="'+i+'" aria-label="Ruolo posizione '+(i+1)+'">'+roleOpts(p?p.role||'':'')+'</select>'+
-      '<button class="rb" data-a="slotpick" data-v="'+i+'">Rosa</button></div></div>';
-  }
+var ZONES=[[3,'Zona 4 · avanti sinistra'],[2,'Zona 3 · avanti centro'],[1,'Zona 2 · avanti destra'],[4,'Zona 5 · dietro sinistra'],[5,'Zona 6 · dietro centro'],[0,'Zona 1 · dietro destra (battuta)']];
+function baseLineup(){
   var lp=liberoPlayer();
-  h+='<div class="slotrow"><span class="ps">Lib</span>'+
+  return S.lineup.map(function(id){return (lp&&id===lp.id&&S.lib&&S.lib.cen)?S.lib.cen:id;});
+}
+function lineupProblems(){
+  var out=[],lp=liberoPlayer(),v=baseLineup();
+  var filled=v.filter(Boolean).length;
+  if(filled<6)out.push('mancano '+(6-filled)+' titolari nella formazione');
+  if(!lp)out.push('manca il libero (riga «Lib»)');
+  var cI=[];v.forEach(function(id,i){var p=player(id);if(p&&p.role==='Centrale')cI.push(i);});
+  var benchC=S.players.filter(function(p){return p.role==='Centrale'&&v.indexOf(p.id)<0;}).length;
+  if(!cI.length&&!benchC)out.push('imposta il ruolo Centrale ai due centrali');
+  else if(cI.length+benchC<2)out.push('imposta il ruolo Centrale anche al secondo centrale');
+  if(cI.length===2&&((cI[1]-cI[0]+6)%6)!==3)out.push('i due centrali sono vicini (zona '+(cI[0]+1)+' e zona '+(cI[1]+1)+'): devono stare opposti, ad esempio zona 3 e 6, oppure 2 e 5, oppure 4 e 1');
+  return out;
+}
+function lineupEditor(){
+  var h='<h2>Formazione titolare</h2><p class="sub">Inserisci le sei titolari come stanno in campo, viste dalla rete. Il libero va nella riga «Lib».</p><div class="card">';
+  ZONES.forEach(function(z,k){
+    var i=z[0],p=slotPlayer(i);
+    if(k===0)h+='<p class="sub" style="margin:0 0 8px"><b>Prima linea (sotto rete)</b></p>';
+    if(k===3)h+='<p class="sub" style="margin:6px 0 8px"><b>Seconda linea (difesa e battuta)</b></p>';
+    h+='<div class="slotrow"><div class="zl">'+z[1]+'</div><span class="ps">P'+(i+1)+'</span>'+
+      '<input class="in" data-slot="'+i+'" data-f="num" inputmode="numeric" maxlength="2" placeholder="N°" value="'+esc(p?p.num||'':'')+'" aria-label="Numero '+z[1]+'">'+
+      '<input class="in" data-slot="'+i+'" data-f="name" maxlength="30" placeholder="Nome atleta" value="'+esc(p?p.name:'')+'" aria-label="Nome '+z[1]+'">'+
+      '<div class="slotsub"><select class="in" data-srole="'+i+'" aria-label="Ruolo '+z[1]+'">'+roleOpts(p?p.role||'':'')+'</select>'+
+      '<button class="rb" data-a="slotpick" data-v="'+i+'">Rosa</button></div></div>';
+  });
+  var lp=liberoPlayer();
+  h+='<p class="sub" style="margin:6px 0 8px"><b>Libero (in panchina)</b></p><div class="slotrow"><span class="ps">Lib</span>'+
     '<input class="in" data-slot="L" data-f="num" inputmode="numeric" maxlength="2" placeholder="N°" value="'+esc(lp?lp.num||'':'')+'" aria-label="Numero libero">'+
-    '<input class="in" data-slot="L" data-f="name" maxlength="30" placeholder="Libero (in panchina)" value="'+esc(lp?lp.name:'')+'" aria-label="Nome libero">'+
+    '<input class="in" data-slot="L" data-f="name" maxlength="30" placeholder="Nome libero" value="'+esc(lp?lp.name:'')+'" aria-label="Nome libero">'+
     '<div class="slotsub"><span class="none">Entra al posto delle centrali in seconda linea</span></div></div>';
+  var ck=chkInfo();
+  h+='<div class="chk '+ck.cls+'" id="chk">'+ck.html+'</div>';
   return h+'</div>';
 }
+function chkInfo(){
+  var pr=lineupProblems();
+  return {cls:pr.length?'bad':'ok',html:'<b>'+(pr.length?'Scambio libero non pronto':'✓ Formazione pronta per lo scambio automatico')+'</b>'+
+    pr.map(function(t){return '<div>✗ '+esc(t.charAt(0).toUpperCase()+t.slice(1))+'</div>';}).join('')};
+}
+function refreshChk(){var el=$('chk');if(!el)return;var ck=chkInfo();el.className='chk '+ck.cls;el.innerHTML=ck.html;}
 function viewSquadra(){
   var h=lineupEditor()+'<h2>Aggiungi atleta</h2><div class="card"><div class="addrow">'+
     '<input class="in" id="pnum" inputmode="numeric" maxlength="2" placeholder="N°" aria-label="Numero maglia">'+
@@ -666,6 +704,9 @@ function playedList(){
   var l=S.players.filter(function(p){return S.events.some(function(e){return e.pid===p.id;});});
   return l.length?l:S.players.slice();
 }
+function subsLine(){
+  var a=[];for(var i=1;i<=S.set;i++)a.push('Set '+i+': '+((S.subs&&S.subs[i])||0)+'/6');return a.join('  ');
+}
 function setsLine(){
   var a=S.sets.map(function(x,i){return 'Set '+(i+1)+': '+x.us+'-'+x.them;}),c=score(S.set);
   if(c[0]||c[1]||!a.length)a.push('Set '+S.set+': '+c[0]+'-'+c[1]);
@@ -675,7 +716,7 @@ function todayIt(){return new Date().toLocaleDateString('it-IT',{day:'2-digit',m
 function csvText(f){
   var head=['N°','Atleta','Ruolo','Punti'],keys=[];
   Object.keys(ACTIONS).forEach(function(t){ACTIONS[t].res.forEach(function(r){head.push(ACTIONS[t].label+' - '+r[1]);keys.push([t,r[0]]);});});
-  var L=[['San Valentino Volley Andria - Scout partita'],['Data: '+todayIt()],['Risultato: '+setsLine()],[],head];
+  var L=[['San Valentino Volley Andria - Scout partita'],['Data: '+todayIt()],['Risultato: '+setsLine()],['Cambi: '+subsLine()],[],head];
   var tot=keys.map(function(){return 0;}),tp=0;
   playedList().forEach(function(p){
     var pt=pointsOf(p.id,f);tp+=pt;
@@ -712,7 +753,7 @@ function printReport(){
   });
   var foot='<tr><td></td><td class="l">Totale</td><td></td><td>'+tp+'</td>'+tot.map(function(c){return '<td>'+c+'</td>';}).join('')+'<td></td><td></td></tr>';
   $('printarea').innerHTML='<div style="display:flex;align-items:center;gap:12px;margin-bottom:8px"><img src="'+LOGO+'" width="54" height="54" alt="">'+
-    '<div><h1>San Valentino Volley Andria · Scout partita</h1><div>'+esc(todayIt())+' · '+esc(setsLine())+'</div></div></div>'+
+    '<div><h1>San Valentino Volley Andria · Scout partita</h1><div>'+esc(todayIt())+' · '+esc(setsLine())+'</div><div>Cambi: '+esc(subsLine())+'</div></div></div>'+
     '<table><thead><tr><th rowspan="2">N°</th><th rowspan="2" class="l">Atleta</th><th rowspan="2" class="l">Ruolo</th><th rowspan="2">Punti</th>'+g1+'<th rowspan="2">Eff. att.</th><th rowspan="2">Ric. +</th></tr><tr>'+g2+'</tr></thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>'+
     '<p style="font-size:10px;margin-top:8px">Punti = attacchi vincenti + ace + muri a punto. Eff. att. = (punti − errori − muri subiti) ÷ attacchi. Ric. + = ricezioni perfette e positive sul totale.</p>';
   setTimeout(function(){window.print();},80);
@@ -790,7 +831,7 @@ document.addEventListener('click',function(ev){
   else if(a==='pick'){
     var pk=(ui.picker&&typeof ui.picker==='object')?ui.picker:{mode:'any'};
     if(pk.mode==='assign'){S.lineup[pk.slot]=v;ui.pid=v;}
-    else if(pk.mode==='sub'){if(pk.slot>-1)S.lineup[pk.slot]=v;ui.pid=v;toast('Cambio fatto');}
+    else if(pk.mode==='sub'){if(pk.slot>-1)S.lineup[pk.slot]=v;ui.pid=v;S.subs[S.set]=(S.subs[S.set]||0)+1;var ns=S.subs[S.set];toast(ns>6?'Attenzione: oltre i 6 cambi del set ('+ns+')':'Cambio fatto · cambi nel set '+ns+'/6',ns>6?4000:2200);}
     else{ui.pid=v;}
     ui.picker=false;
     var lm3=autoLibero();if(lm3)toast(lm3,3500);
@@ -817,6 +858,7 @@ document.addEventListener('click',function(ev){
     toast(pm||(pname(player(ui.pid))+' · '+label(t,r)),pm?3500:1400);
   }
   else if(a==='adj'){var ev2={id:uid(),pid:null,type:'adj',res:v,set:S.set,t:Date.now()};S.events.push(ev2);var pm2=afterPoint(ev2);if(pm2)toast(pm2,3500);}
+  else if(a==='subminus'){if(S.subs[S.set]>0)S.subs[S.set]--;}
   else if(a==='serve'){S.serving=v;var lm1=autoLibero();if(lm1)toast(lm1);}
   else if(a==='libero'){toast(autoLibero('manual'));}
   else if(a==='undo'){
@@ -851,7 +893,7 @@ document.addEventListener('click',function(ev){
   else if(a==='delev'){S.events=S.events.filter(function(e){return e.id!==v;});}
   else if(a==='reset'){
     if(ui.arm!=='reset'){arm('reset');toast('Tocca di nuovo per azzerare risultato e statistiche');}
-    else{S.events=[];S.sets=[];S.set=1;S.serving='us';S.libMsg='';if(S.lib)S.lib.wait=false;disarm();ui.prev=null;ui.csv=false;toast('Partita azzerata');ui.detail=null;}
+    else{S.events=[];S.sets=[];S.set=1;S.serving='us';S.libMsg='';S.subs={};if(S.lib)S.lib.wait=false;disarm();ui.prev=null;ui.csv=false;toast('Partita azzerata');ui.detail=null;}
   }
   save();render();
 });
@@ -861,7 +903,7 @@ document.addEventListener('input',function(e){
 });
 document.addEventListener('change',function(e){
   var sr=e.target.getAttribute&&e.target.getAttribute('data-srole');
-  if(sr!==null&&sr!==undefined){var ps0=slotPlayer(Number(sr));if(ps0){ps0.role=e.target.value;save();}return;}
+  if(sr!==null&&sr!==undefined){var ps0=slotPlayer(Number(sr));if(ps0){ps0.role=e.target.value;save();}refreshChk();return;}
   var sl=e.target.getAttribute&&e.target.getAttribute('data-slot');
   if(sl==='L'){
     var rowL=e.target.closest('.slotrow');
@@ -869,7 +911,7 @@ document.addEventListener('change',function(e){
     var lpx=liberoPlayer();
     if(lpx){if(nmL)lpx.name=nmL;lpx.num=nnL;}
     else if(nmL){S.players.push({id:uid(),name:nmL,num:nnL,role:'Libero'});toast('Libero inserito');}
-    save();
+    save();refreshChk();
     setTimeout(function(){var ae=document.activeElement;if(!ae||!ae.closest||!ae.closest('.slotrow'))render();},200);
     return;
   }
@@ -879,7 +921,7 @@ document.addEventListener('change',function(e){
     var p=slotPlayer(i);
     if(p){if(nm)p.name=nm;p.num=nn;}
     else if(nm){var rsel=row.querySelector('[data-srole]');var np={id:uid(),name:nm,num:nn,role:rsel?rsel.value:''};S.players.push(np);S.lineup[i]=np.id;toast('Titolare inserita');}
-    save();
+    save();refreshChk();
     setTimeout(function(){var ae=document.activeElement;if(!ae||!ae.closest||!ae.closest('.slotrow'))render();},200);
     return;
   }
@@ -895,7 +937,7 @@ document.addEventListener('keydown',function(e){
 render();
 })();
 
-if('serviceWorker' in navigator){window.addEventListener('load',function(){try{navigator.serviceWorker.register('sw.js').catch(function(){});}catch(e){}});}
+if('serviceWorker' in navigator){window.addEventListener('load',function(){try{navigator.serviceWorker.register('sw.js',{updateViaCache:'none'}).catch(function(){});}catch(e){}});}
 </script>
 </body>
 </html>
